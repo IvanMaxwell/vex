@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Multi-Agent System</title>
+<style>
+  /* ─── Reset & Base ─── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:        #0d1117;
+    --surface:   #161b22;
+    --surface2:  #21262d;
+    --border:    #30363d;
+    --text:      #c9d1d9;
+    --text-dim:  #8b949e;
+    --accent:    #58a6ff;
+    --green:     #3fb950;
+    --yellow:    #d29922;
+    --red:       #f85149;
+    --purple:    #bc8cff;
+    --orange:    #ffa657;
+    --teal:      #39d3c3;
+    --radius:    10px;
+    --font:      'Segoe UI', system-ui, sans-serif;
+  }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    overflow: hidden;
+  }
+
+  /* ─── Header ─── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-icon { font-size: 26px; }
+  .logo-text h1 { font-size: 18px; font-weight: 700; color: var(--accent); }
+  .logo-text p  { font-size: 11px; color: var(--text-dim); }
+  .status-bar { display: flex; gap: 16px; }
+  .status-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+  .dot.green  { background: var(--green);  box-shadow: 0 0 6px var(--green); }
+  .dot.red    { background: var(--red);    box-shadow: 0 0 6px var(--red); }
+  .dot.yellow { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+
+  /* ─── Main Layout ─── */
+  main {
+    display: grid;
+    grid-template-columns: 300px 1fr 260px;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  /* ─── Sidebar Panels ─── */
+  .panel {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .panel.right { border-right: none; border-left: 1px solid var(--border); }
+  .panel-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    color: var(--text-dim);
+  }
+  .panel-body { flex: 1; overflow-y: auto; padding: 12px; }
+  .panel-body::-webkit-scrollbar { width: 4px; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* ─── Agent Cards ─── */
+  .agent-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+    margin-bottom: 10px;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .agent-card.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 12px rgba(88,166,255,.15);
+  }
+  .agent-card.done { border-color: var(--green); }
+  .agent-card.error{ border-color: var(--red);   }
+  .agent-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .agent-icon { font-size: 20px; }
+  .agent-name { font-size: 13px; font-weight: 600; }
+  .agent-badge {
+    margin-left: auto;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: var(--border);
+    color: var(--text-dim);
+  }
+  .agent-badge.active { background: rgba(88,166,255,.2); color: var(--accent); }
+  .agent-badge.done   { background: rgba(63,185,80,.2);  color: var(--green);  }
+  .agent-badge.error  { background: rgba(248,81,73,.2);  color: var(--red);    }
+  .agent-status { font-size: 11px; color: var(--text-dim); min-height: 14px; }
+
+  /* ─── Center: Stream Panel ─── */
+  .stream-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  .stream-toolbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+  .filter-btn {
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 11px;
+    transition: all .15s;
+  }
+  .filter-btn.active  { background: var(--surface2); color: var(--text); border-color: var(--accent); }
+  .filter-btn:hover   { color: var(--text); }
+  #stream {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    scroll-behavior: smooth;
+  }
+  #stream::-webkit-scrollbar { width: 6px; }
+  #stream::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* Stream message types */
+  .msg { margin-bottom: 6px; display: flex; gap: 10px; }
+  .msg-tag {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    align-self: flex-start;
+    margin-top: 3px;
+    white-space: nowrap;
+  }
+  .msg-content { flex: 1; word-break: break-word; white-space: pre-wrap; }
+
+  /* Type-specific colours */
+  .msg.thought   .msg-tag { background: rgba(88,166,255,.15); color: var(--accent); }
+  .msg.status    .msg-tag { background: rgba(63,185,80,.15);  color: var(--green);  }
+  .msg.tool_call .msg-tag { background: rgba(255,166,87,.15); color: var(--orange); }
+  .msg.tool_result .msg-tag { background: rgba(57,211,195,.15); color: var(--teal); }
+  .msg.error     .msg-tag { background: rgba(248,81,73,.15);  color: var(--red);    }
+  .msg.info      .msg-tag { background: rgba(188,140,255,.15);color: var(--purple); }
+  .msg.final_summary .msg-tag { background: rgba(63,185,80,.25);  color: var(--green); }
+
+  /* Streaming cursor */
+  .cursor { display: inline-block; width: 2px; height: 1em; background: var(--accent); animation: blink .7s infinite; vertical-align: text-bottom; }
+  @keyframes blink { 0%,49% { opacity:1; } 50%,100% { opacity:0; } }
+
+  /* ─── Input Bar (footer) ─── */
+  footer {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+  }
+  .input-wrap { flex: 1; position: relative; }
+  #task-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    padding: 10px 14px;
+    font-size: 14px;
+    resize: none;
+    min-height: 44px;
+    max-height: 120px;
+    outline: none;
+    font-family: var(--font);
+    transition: border-color .2s;
+    overflow-y: auto;
+  }
+  #task-input:focus    { border-color: var(--accent); }
+  #task-input::placeholder { color: var(--text-dim); }
+  .btn {
+    padding: 10px 18px;
+    border-radius: var(--radius);
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all .15s;
+    white-space: nowrap;
+  }
+  .btn-run  { background: var(--accent); color: #0d1117; }
+  .btn-run:hover { background: #79b8ff; }
+  .btn-run:disabled { background: var(--border); color: var(--text-dim); cursor: not-allowed; }
+  .btn-stop { background: rgba(248,81,73,.15); color: var(--red); border: 1px solid rgba(248,81,73,.3); }
+  .btn-stop:hover { background: rgba(248,81,73,.25); }
+  .btn-clear{ background: var(--surface2); color: var(--text-dim); border: 1px solid var(--border); }
+  .btn-clear:hover { color: var(--text); }
+
+  /* ─── Right Panel: Memory & Preferences ─── */
+  .memory-section { margin-bottom: 16px; }
+  .memory-section h4 { font-size: 11px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing:.6px; margin-bottom: 8px; }
+  .memory-stat { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .memory-stat:last-child { border: none; }
+  .memory-stat span:last-child { color: var(--accent); font-weight: 600; }
+  .pref-input-row { display: flex; gap: 6px; margin-top: 8px; }
+  .pref-input-row input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 5px 8px;
+    font-size: 12px;
+    outline: none;
+  }
+  .pref-input-row input:focus { border-color: var(--accent); }
+  .btn-xs { padding: 5px 10px; border-radius: 6px; font-size: 11px; background: var(--accent); color: #0d1117; border: none; cursor: pointer; font-weight: 600; }
+  .plan-list { list-style: none; }
+  .plan-list li {
+    font-size: 12px;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-dim);
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .plan-list li.done   { color: var(--green); }
+  .plan-list li.active { color: var(--accent); }
+  .plan-step-num { flex-shrink: 0; font-weight: 700; }
+
+  /* ─── PERMISSION MODAL ─── */
+  #perm-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.7);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+  #perm-overlay.show { display: flex; }
+  #perm-modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px 32px;
+    max-width: 500px;
+    width: 95vw;
+    box-shadow: 0 24px 64px rgba(0,0,0,.5);
+    animation: slideIn .2s ease;
+  }
+  @keyframes slideIn { from { transform: translateY(-20px); opacity:0; } to { transform: translateY(0); opacity:1; } }
+  #perm-modal h2 { font-size: 18px; margin-bottom: 6px; }
+  #perm-modal .perm-tool {
+    display: inline-block;
+    background: rgba(255,166,87,.15);
+    color: var(--orange);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 3px 12px;
+    border-radius: 20px;
+    margin-bottom: 14px;
+  }
+  #perm-desc { font-size: 13px; color: var(--text); margin-bottom: 10px; line-height: 1.5; }
+  #perm-params {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--text-dim);
+    font-family: monospace;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 120px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+  }
+  .perm-actions { display: flex; gap: 12px; justify-content: flex-end; }
+  .btn-allow { background: var(--green); color: #0d1117; }
+  .btn-allow:hover { background: #56d364; }
+  .btn-deny  { background: rgba(248,81,73,.15); color: var(--red); border: 1px solid rgba(248,81,73,.3); }
+  .btn-deny:hover  { background: rgba(248,81,73,.25); }
+  .perm-timer { font-size: 12px; color: var(--text-dim); align-self: center; margin-right: auto; }
+
+  /* ─── Toast ─── */
+  #toast {
+    position: fixed;
+    bottom: 80px;
+    right: 24px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 16px;
+    font-size: 13px;
+    z-index: 500;
+    opacity: 0;
+    transition: opacity .3s;
+    pointer-events: none;
+  }
+  #toast.show { opacity: 1; }
+
+  /* ─── Scrollbar ─── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!-- ════════════════ HEADER ════════════════ -->
+<header>
+  <div class="logo">
+    <span class="logo-icon">🤖</span>
+    <div class="logo-text">
+      <h1>Multi-Agent System</h1>
+      <p>LangGraph · LangChain · Ollama</p>
+    </div>
+  </div>
+  <div class="status-bar">
+    <div class="status-item"><div class="dot" id="ws-dot"></div><span id="ws-label">Connecting…</span></div>
+    <div class="status-item"><div class="dot" id="ollama-dot"></div><span id="ollama-label">Ollama idle</span></div>
+    <div class="status-item" style="font-size:11px;color:var(--text-dim);">Model: <strong id="model-label" style="color:var(--accent)">unknown</strong></div>
+  </div>
+</header>
+
+<!-- ════════════════ MAIN ════════════════ -->
+<main>
+
+  <!-- LEFT: Agents + Plan -->
+  <div class="panel">
+    <div class="panel-header">⚡ Agents</div>
+    <div class="panel-body">
+      <div class="agent-card" id="card-Planner">
+        <div class="agent-header">
+          <span class="agent-icon">📋</span>
+          <span class="agent-name">Planner</span>
+          <span class="agent-badge" id="badge-Planner">Idle</span>
+        </div>
+        <div class="agent-status" id="status-Planner">Waiting for task…</div>
+      </div>
+      <div class="agent-card" id="card-Executor">
+        <div class="agent-header">
+          <span class="agent-icon">⚙️</span>
+          <span class="agent-name">Executor</span>
+          <span class="agent-badge" id="badge-Executor">Idle</span>
+        </div>
+        <div class="agent-status" id="status-Executor">Waiting for plan…</div>
+      </div>
+      <div class="agent-card" id="card-Researcher">
+        <div class="agent-header">
+          <span class="agent-icon">🔍</span>
+          <span class="agent-name">Researcher</span>
+          <span class="agent-badge" id="badge-Researcher">Idle</span>
+        </div>
+        <div class="agent-status" id="status-Researcher">On standby</div>
+      </div>
+      <div class="agent-card" id="card-UI Controller">
+        <div class="agent-header">
+          <span class="agent-icon">🖥️</span>
+          <span class="agent-name">UI Controller</span>
+          <span class="agent-badge" id="badge-UI Controller">Idle</span>
+        </div>
+        <div class="agent-status" id="status-UI Controller">On standby</div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <div class="panel-header" style="padding:0 0 8px; border:none; font-size:11px;">📌 Execution Plan</div>
+        <ul class="plan-list" id="plan-list">
+          <li style="color:var(--text-dim);font-style:italic;">No plan yet</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER: Stream Output -->
+  <div class="stream-panel">
+    <div class="stream-toolbar">
+      <span style="color:var(--text-dim);font-size:12px;margin-right:6px;">Filter:</span>
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="thought">Thoughts</button>
+      <button class="filter-btn" data-filter="status">Status</button>
+      <button class="filter-btn" data-filter="tool">Tools</button>
+      <button class="filter-btn" data-filter="error">Errors</button>
+      <div style="flex:1"></div>
+      <span id="msg-count" style="font-size:11px;color:var(--text-dim);">0 messages</span>
+    </div>
+    <div id="stream">
+      <div class="msg info">
+        <span class="msg-tag">SYSTEM</span>
+        <span class="msg-content">Welcome! Enter a task below and click Run. The agents will plan, research, and execute it step by step. You will be asked to approve every tool action.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Memory & Preferences -->
+  <div class="panel right">
+    <div class="panel-header">🧠 Memory & Settings</div>
+    <div class="panel-body">
+
+      <div class="memory-section">
+        <h4>Memory Stats</h4>
+        <div class="memory-stat"><span>Vector DB</span><span id="mem-vector">Checking…</span></div>
+        <div class="memory-stat"><span>Tasks stored</span><span id="mem-tasks">0</span></div>
+        <div class="memory-stat"><span>Preferences</span><span id="mem-prefs">0</span></div>
+        <div class="memory-stat"><span>Learned facts</span><span id="mem-facts">0</span></div>
+        <button class="btn btn-clear" style="width:100%;margin-top:8px;font-size:12px" onclick="loadMemory()">↻ Refresh Memory</button>
+      </div>
+
+      <div class="memory-section">
+        <h4>User Preferences</h4>
+        <p style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">Tell the agents about yourself so they work smarter.</p>
+        <div class="pref-input-row">
+          <input id="pref-key"   placeholder="preference key"   />
+          <input id="pref-val"   placeholder="value"  />
+          <button class="btn-xs" onclick="savePref()">Save</button>
+        </div>
+        <div id="pref-list" style="margin-top:10px;font-size:12px;"></div>
+      </div>
+
+      <div class="memory-section">
+        <h4>Workspace</h4>
+        <p style="font-size:11px;color:var(--text-dim);">Agents work in a safe sandbox folder. Original files are never touched.</p>
+        <div style="font-size:11px;color:var(--accent);margin-top:6px;word-break:break-all;">./agent_workspace/</div>
+      </div>
+
+      <div class="memory-section">
+        <h4>Example Tasks</h4>
+        <div id="examples" style="display:flex;flex-direction:column;gap:6px;"></div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<!-- ════════════════ FOOTER / INPUT ════════════════ -->
+<footer>
+  <div class="input-wrap">
+    <textarea id="task-input" rows="1" placeholder="Describe your task… e.g. check CPU usage, find PDFs in Downloads, open WhatsApp and send hi to mom"></textarea>
+  </div>
+  <button class="btn btn-run" id="btn-run" onclick="runTask()">▶ Run</button>
+  <button class="btn btn-stop" id="btn-stop" onclick="stopTask()" disabled>⬛ Stop</button>
+  <button class="btn btn-clear" onclick="clearStream()">🗑 Clear</button>
+</footer>
+
+<!-- ════════════════ PERMISSION MODAL ════════════════ -->
+<div id="perm-overlay">
+  <div id="perm-modal">
+    <h2>🔐 Permission Required</h2>
+    <span class="perm-tool" id="perm-tool-name">tool_name</span>
+    <p id="perm-desc">Description…</p>
+    <div id="perm-params">params…</div>
+    <div class="perm-actions">
+      <span class="perm-timer" id="perm-timer">⏱ 180s</span>
+      <button class="btn btn-deny"  onclick="respondPerm(false)">✕ Deny</button>
+      <button class="btn btn-allow" onclick="respondPerm(true)">✓ Allow</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ TOAST ════════════════ -->
+<div id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════
+let ws = null;
+let isRunning = false;
+let currentPermId = null;
+let permTimer = null;
+let currentFilter = "all";
+let msgCount = 0;
+let currentThoughtEl = null;  // the element being streamed into
+let currentThoughtAgent = null;
+let plan = [];
+let currentStep = -1;
+
+// ════════════════════════════════════════════════
+//  WEBSOCKET
+// ════════════════════════════════════════════════
+function connect() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(`${proto}//${location.host}/ws`);
+
+  ws.onopen = () => {
+    setWsStatus("green", "Connected");
+    loadMemory();
+  };
+
+  ws.onclose = () => {
+    setWsStatus("red", "Disconnected");
+    setTimeout(connect, 3000);
+  };
+
+  ws.onerror = () => setWsStatus("red", "Error");
+
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    handleMessage(msg);
+  };
+}
+
+// ════════════════════════════════════════════════
+//  MESSAGE HANDLER
+// ════════════════════════════════════════════════
+function handleMessage(msg) {
+  const { type, agent, content } = msg;
+
+  // ── Permission request ──────────────────────
+  if (type === "permission_request") {
+    showPermission(msg);
+    return;
+  }
+
+  // ── Memory data ──────────────────────────────
+  if (type === "memory_data") {
+    updateMemoryDisplay(JSON.parse(content));
+    return;
+  }
+
+  if (type === "model_info") {
+    setModelStatus(content, msg.num_ctx);
+    return;
+  }
+
+  if (type === "plan") {
+    renderPlan(msg.steps || []);
+    return;
+  }
+
+  // ── Pipeline done ────────────────────────────
+  if (type === "done") {
+    setRunning(false);
+    appendMsg("info", "System", "✅ Pipeline finished.");
+    return;
+  }
+
+  // ── Stopped ─────────────────────────────────
+  if (type === "stopped") {
+    setRunning(false);
+    appendMsg("error", "System", "🛑 Stopped.");
+    return;
+  }
+
+  // ── Final summary ────────────────────────────
+  if (type === "final_summary") {
+    finalizeThought();
+    appendMsg("final_summary", "System",
+      `📊 Summary:\n${content}\n${msg.success ? "✅ Task succeeded." : "⚠️ Task finished with issues."}`);
+    return;
+  }
+
+  // ── Status (short banners) ───────────────────
+  if (type === "status") {
+    finalizeThought();
+    setAgentStatus(agent, content);
+    appendMsg("status", agent, content);
+    // Parse plan steps from status if applicable
+    parsePlanFromStatus(agent, content);
+    return;
+  }
+
+  // ── LLM token stream ────────────────────────
+  if (type === "thought") {
+    appendThoughtToken(agent, content);
+    return;
+  }
+
+  // ── Tool call / result ───────────────────────
+  if (type === "tool_call") {
+    finalizeThought();
+    appendMsg("tool_call", agent, content);
+    return;
+  }
+
+  if (type === "tool_result") {
+    appendMsg("tool_result", agent, content);
+    return;
+  }
+
+  // ── Error ────────────────────────────────────
+  if (type === "error") {
+    finalizeThought();
+    appendMsg("error", agent, content);
+    setAgentError(agent);
+    return;
+  }
+
+  // ── Info ─────────────────────────────────────
+  if (type === "info") {
+    finalizeThought();
+    appendMsg("info", agent, content);
+    return;
+  }
+}
+
+// ════════════════════════════════════════════════
+//  STREAM RENDERING
+// ════════════════════════════════════════════════
+function appendMsg(type, agent, content) {
+  if (!shouldShow(type)) return;
+  const stream = document.getElementById("stream");
+  const div = document.createElement("div");
+  div.className = `msg ${type}`;
+  div.dataset.type = type;
+  div.innerHTML = `<span class="msg-tag">${agentTag(agent, type)}</span><span class="msg-content">${esc(content)}</span>`;
+  stream.appendChild(div);
+  msgCount++;
+  document.getElementById("msg-count").textContent = `${msgCount} messages`;
+  stream.scrollTop = stream.scrollHeight;
+  return div;
+}
+
+function appendThoughtToken(agent, token) {
+  if (!shouldShow("thought")) return;
+  const stream = document.getElementById("stream");
+
+  // If same agent is still streaming, append to existing element
+  if (currentThoughtEl && currentThoughtAgent === agent) {
+    // Remove cursor, add token, re-add cursor
+    const cursor = currentThoughtEl.querySelector(".cursor");
+    if (cursor) cursor.remove();
+    currentThoughtEl.querySelector(".msg-content").textContent += token;
+    const newCursor = document.createElement("span");
+    newCursor.className = "cursor";
+    currentThoughtEl.querySelector(".msg-content").appendChild(newCursor);
+  } else {
+    // New thought bubble
+    finalizeThought();
+    const div = document.createElement("div");
+    div.className = "msg thought";
+    div.dataset.type = "thought";
+    const tagSpan = document.createElement("span");
+    tagSpan.className = "msg-tag";
+    tagSpan.textContent = agentTag(agent, "thought");
+    const contentSpan = document.createElement("span");
+    contentSpan.className = "msg-content";
+    contentSpan.textContent = token;
+    const cursor = document.createElement("span");
+    cursor.className = "cursor";
+    contentSpan.appendChild(cursor);
+    div.appendChild(tagSpan);
+    div.appendChild(contentSpan);
+    stream.appendChild(div);
+    currentThoughtEl    = div;
+    currentThoughtAgent = agent;
+    msgCount++;
+    document.getElementById("msg-count").textContent = `${msgCount} messages`;
+  }
+  stream.scrollTop = stream.scrollHeight;
+}
+
+function finalizeThought() {
+  if (currentThoughtEl) {
+    const cursor = currentThoughtEl.querySelector(".cursor");
+    if (cursor) cursor.remove();
+    currentThoughtEl    = null;
+    currentThoughtAgent = null;
+  }
+}
+
+function agentTag(agent, type) {
+  const icons = { Planner:"📋", Executor:"⚙️", Researcher:"🔍",
+    "UI Controller":"🖥️", System:"🔧", Memory:"🧠", Tools:"🔩",
+    file_ops:"📁", web_search:"🌐", terminal_exec:"💻", system_tool:"📊", ui_control:"🖱️" };
+  const icon = icons[agent] || "🤖";
+  return `${icon} ${agent}`;
+}
+
+function esc(str) {
+  return String(str)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/\n/g,"<br>");
+}
+
+function shouldShow(type) {
+  if (currentFilter === "all") return true;
+  if (currentFilter === "thought") return type === "thought";
+  if (currentFilter === "status")  return type === "status" || type === "info" || type === "final_summary";
+  if (currentFilter === "tool")    return type === "tool_call" || type === "tool_result";
+  if (currentFilter === "error")   return type === "error";
+  return true;
+}
+
+// ════════════════════════════════════════════════
+//  AGENT STATUS CARDS
+// ════════════════════════════════════════════════
+const AGENTS = ["Planner","Executor","Researcher","UI Controller"];
+
+function setAgentActive(agent) {
+  AGENTS.forEach(a => {
+    const card  = document.getElementById(`card-${a}`);
+    const badge = document.getElementById(`badge-${a}`);
+    if (!card) return;
+    card.className  = `agent-card${a === agent ? " active" : ""}`;
+    badge.className = `agent-badge${a === agent ? " active" : ""}`;
+    badge.textContent = a === agent ? "Running" : "Idle";
+  });
+}
+
+function setAgentDone(agent) {
+  const card  = document.getElementById(`card-${agent}`);
+  const badge = document.getElementById(`badge-${agent}`);
+  if (card) { card.className = "agent-card done"; }
+  if (badge){ badge.className = "agent-badge done"; badge.textContent = "Done"; }
+}
+
+function setAgentError(agent) {
+  const card  = document.getElementById(`card-${agent}`);
+  const badge = document.getElementById(`badge-${agent}`);
+  if (card) { card.className = "agent-card error"; }
+  if (badge){ badge.className = "agent-badge error"; badge.textContent = "Error"; }
+}
+
+function setAgentStatus(agent, text) {
+  const el = document.getElementById(`status-${agent}`);
+  if (el) el.textContent = text.replace(/[🔍✅📋▶⚙️🖥️]/gu,"").trim().substring(0,80);
+  setAgentActive(agent);
+}
+
+function parsePlanFromStatus(agent, content) {
+  // When planner emits "✅ Plan ready — N steps", we don't have the plan yet
+  // Plan is rendered when we get actual plan steps from state — we'll parse
+  // from "▶ Step X/Y: ..." status messages from Executor
+  const m = content.match(/Step\s+(\d+)\/(\d+):\s*(.+)/);
+  if (m) {
+    currentStep = parseInt(m[1]) - 1;
+    updatePlanHighlight();
+  }
+}
+
+function renderPlan(steps) {
+  plan = steps;
+  const ul = document.getElementById("plan-list");
+  ul.innerHTML = "";
+  steps.forEach((step, i) => {
+    const li = document.createElement("li");
+    li.id = `plan-step-${i}`;
+    li.innerHTML = `<span class="plan-step-num">${i+1}.</span><span>${esc(step)}</span>`;
+    ul.appendChild(li);
+  });
+  updatePlanHighlight();
+}
+
+function updatePlanHighlight() {
+  plan.forEach((_, i) => {
+    const li = document.getElementById(`plan-step-${i}`);
+    if (!li) return;
+    if (i < currentStep)      li.className = "done";
+    else if (i === currentStep) li.className = "active";
+    else                       li.className = "";
+  });
+}
+
+// ════════════════════════════════════════════════
+//  RUN / STOP
+// ════════════════════════════════════════════════
+function runTask() {
+  const task = document.getElementById("task-input").value.trim();
+  if (!task) { showToast("Please enter a task!"); return; }
+  if (!ws || ws.readyState !== WebSocket.OPEN) { showToast("Not connected to server."); return; }
+
+  setRunning(true);
+  finalizeThought();
+  plan = [];
+  currentStep = -1;
+  document.getElementById("plan-list").innerHTML =
+    '<li style="color:var(--text-dim);font-style:italic;">Planning…</li>';
+
+  AGENTS.forEach(a => {
+    const card  = document.getElementById(`card-${a}`);
+    const badge = document.getElementById(`badge-${a}`);
+    const status= document.getElementById(`status-${a}`);
+    if (card)  card.className  = "agent-card";
+    if (badge) { badge.className = "agent-badge"; badge.textContent = "Idle"; }
+    if (status) status.textContent = "Waiting…";
+  });
+
+  appendMsg("info", "System", `🚀 Task started: "${task}"`);
+  ws.send(JSON.stringify({ type:"run", task }));
+}
+
+function stopTask() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type:"stop" }));
+  }
+}
+
+function setRunning(running) {
+  isRunning = running;
+  document.getElementById("btn-run").disabled  =  running;
+  document.getElementById("btn-stop").disabled = !running;
+  if (!running) {
+    AGENTS.forEach(a => {
+      const badge = document.getElementById(`badge-${a}`);
+      if (badge && badge.textContent === "Running") {
+        badge.className  = "agent-badge done";
+        badge.textContent = "Done";
+      }
+    });
+  }
+}
+
+function clearStream() {
+  document.getElementById("stream").innerHTML = "";
+  msgCount = 0;
+  currentThoughtEl = null;
+  document.getElementById("msg-count").textContent = "0 messages";
+}
+
+// ════════════════════════════════════════════════
+//  PERMISSION MODAL
+// ════════════════════════════════════════════════
+let permTimerCount = 180;
+let permTimerInterval = null;
+
+function showPermission(msg) {
+  currentPermId = msg.id;
+  document.getElementById("perm-tool-name").textContent = msg.tool;
+  document.getElementById("perm-desc").textContent      = msg.description;
+  document.getElementById("perm-params").textContent    = msg.params;
+  document.getElementById("perm-overlay").classList.add("show");
+
+  permTimerCount = 180;
+  document.getElementById("perm-timer").textContent = `⏱ ${permTimerCount}s`;
+  clearInterval(permTimerInterval);
+  permTimerInterval = setInterval(() => {
+    permTimerCount--;
+    document.getElementById("perm-timer").textContent = `⏱ ${permTimerCount}s`;
+    if (permTimerCount <= 0) {
+      clearInterval(permTimerInterval);
+      respondPerm(false);  // auto-deny on timeout
+    }
+  }, 1000);
+}
+
+function respondPerm(granted) {
+  clearInterval(permTimerInterval);
+  document.getElementById("perm-overlay").classList.remove("show");
+  if (ws && ws.readyState === WebSocket.OPEN && currentPermId) {
+    ws.send(JSON.stringify({ type:"permission_response", id:currentPermId, granted }));
+    appendMsg(
+      granted ? "info" : "error",
+      "Permissions",
+      `${granted ? "✅ Allowed" : "⛔ Denied"}: ${document.getElementById("perm-tool-name").textContent}`
+    );
+  }
+  currentPermId = null;
+}
+
+// ════════════════════════════════════════════════
+//  MEMORY
+// ════════════════════════════════════════════════
+function loadMemory() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type:"get_memory" }));
+  }
+}
+
+function updateMemoryDisplay(data) {
+  document.getElementById("mem-vector").textContent = data.vector_ok ? "✅ Ready" : "❌ Off";
+  document.getElementById("mem-tasks").textContent  = data.task_count || 0;
+  const prefs = data.preferences || {};
+  const facts = data.learned_facts || {};
+  document.getElementById("mem-prefs").textContent = Object.keys(prefs).length;
+  document.getElementById("mem-facts").textContent = Object.keys(facts).length;
+
+  // Render preferences
+  const list = document.getElementById("pref-list");
+  list.innerHTML = "";
+  Object.entries(prefs).forEach(([k,v]) => {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);";
+    row.innerHTML = `<span style="color:var(--text-dim)">${esc(k)}</span><span style="color:var(--accent)">${esc(String(v))}</span>`;
+    list.appendChild(row);
+  });
+}
+
+function savePref() {
+  const key = document.getElementById("pref-key").value.trim();
+  const val = document.getElementById("pref-val").value.trim();
+  if (!key || !val) { showToast("Enter both key and value."); return; }
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type:"update_preference", key, value:val }));
+    document.getElementById("pref-key").value = "";
+    document.getElementById("pref-val").value = "";
+    setTimeout(loadMemory, 500);
+  }
+}
+
+// ════════════════════════════════════════════════
+//  FILTER BUTTONS
+// ════════════════════════════════════════════════
+document.querySelectorAll(".filter-btn").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentFilter = btn.dataset.filter;
+  };
+});
+
+// ════════════════════════════════════════════════
+//  EXAMPLE TASKS
+// ════════════════════════════════════════════════
+const EXAMPLES = [
+  "Check if my CPU, GPU, and RAM usage are normal",
+  "Check Apple stock price",
+  "Find all PDF files in the Downloads folder and move them to a new folder called PDF",
+  "Open WhatsApp and type hi to mom",
+  "Plan a simple PC cleanup without touching my Downloads or project folders",
+  "What is my disk usage?",
+];
+
+function renderExamples() {
+  const container = document.getElementById("examples");
+  EXAMPLES.forEach(ex => {
+    const btn = document.createElement("button");
+    btn.className = "btn btn-clear";
+    btn.style.cssText = "text-align:left;font-size:11px;padding:6px 10px;white-space:normal;line-height:1.4;";
+    btn.textContent = ex;
+    btn.onclick = () => {
+      document.getElementById("task-input").value = ex;
+    };
+    container.appendChild(btn);
+  });
+}
+
+// ════════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════════
+function setWsStatus(color, label) {
+  document.getElementById("ws-dot").className   = `dot ${color}`;
+  document.getElementById("ws-label").textContent = label;
+}
+
+function setModelStatus(modelName, numCtx) {
+  document.getElementById("ollama-dot").className = "dot green";
+  document.getElementById("ollama-label").textContent = numCtx
+    ? `Ollama ready · ctx ${numCtx}`
+    : "Ollama ready";
+  document.getElementById("model-label").textContent = modelName || "unknown";
+}
+
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2500);
+}
+
+// Auto-resize textarea
+document.getElementById("task-input").addEventListener("input", function() {
+  this.style.height = "44px";
+  this.style.height = Math.min(this.scrollHeight, 120) + "px";
+});
+
+// Ctrl+Enter to run
+document.getElementById("task-input").addEventListener("keydown", e => {
+  if (e.ctrlKey && e.key === "Enter") { e.preventDefault(); runTask(); }
+});
+
+// ════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════
+renderExamples();
+connect();
+</script>
+</body>
+</html>
