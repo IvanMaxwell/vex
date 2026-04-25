@@ -12,6 +12,19 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 
+import uuid
+import time
+from fastapi.responses import JSONResponse
+from fastapi.responses import StreamingResponse
+from fastapi import Request
+import system_metrics
+import queue
+
+# Start threshold watcher
+threading.Thread(target=system_metrics._threshold_watcher, daemon=True).start()
+
+_SESSIONS = []
+
 from config import MODEL_NAME, OLLAMA_NUM_CTX, TEMPLATES_DIR, WORKSPACE_DIR
 from memory_system import memory_manager
 from runtime import Streamer, PermissionManager, bind_runtime, clear_runtime
@@ -29,8 +42,93 @@ async def index():
         return HTMLResponse(f.read())
 
 
+
+@app.get("/session")
+async def get_sessions():
+    return JSONResponse(_SESSIONS)
+
+@app.post("/session/new")
+async def new_session(request: Request):
+    body = await request.json()
+    sess_id = str(uuid.uuid4())
+    sess = {
+        "id": sess_id,
+        "created_at": int(time.time() * 1000),
+        "agent_mode": body.get("agent_mode", "pipeline")
+    }
+    _SESSIONS.append(sess)
+    return JSONResponse(sess)
+
+@app.get("/health")
+async def health():
+    return JSONResponse({"ok": True, "service": "multi-agent-system"})
+
+@app.get("/metrics")
+async def get_metrics():
+    return JSONResponse(system_metrics.get_metrics())
+
+@app.get("/graph")
+async def get_graph():
+    try:
+        return JSONResponse(system_metrics.get_graph())
+    except Exception as exc:
+        return JSONResponse(
+            {"nodes": [], "edges": [], "ts": time.time(), "error": f"graph_unavailable: {exc}"},
+            status_code=200,
+        )
+
+@app.get("/monitor/sample")
+async def monitor_sample(proc: str, metrics: str = "cpu,mem"):
+    metric_list = [m.strip() for m in metrics.split(",") if m.strip()][:2]
+    return JSONResponse(system_metrics.get_process_sample(proc, metric_list))
+
+@app.get("/notify/pending")
+async def notify_pending():
+    items = []
+    while not system_metrics._notif_queue.empty():
+        try: items.append(system_metrics._notif_queue.get_nowait())
+        except queue.Empty: break
+    return JSONResponse(items)
+
+@app.post("/notify")
+async def notify_post(request: Request):
+    body = await request.json()
+    n = system_metrics._push_notification(
+        title=body.get("title", "Notification"),
+        message=body.get("message", ""),
+        level=body.get("level", "info"),
+        duration_ms=int(body.get("duration_ms", 5000))
+    )
+    return JSONResponse({"ok": True, "id": n["id"]})
+
+@app.get("/notify/stream")
+async def notify_stream(request: Request):
+    q = queue.Queue()
+    with system_metrics._sse_lock:
+        system_metrics._sse_listeners.append(q)
+
+    async def event_generator():
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    data = await asyncio.to_thread(q.get, True, 1)
+                    yield f"data: {data}\n\n"
+                except queue.Empty:
+                    yield ": heartbeat\n\n"
+        finally:
+            with system_metrics._sse_lock:
+                try: system_metrics._sse_listeners.remove(q)
+                except: pass
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
 @app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
+@app.websocket("/ws/{session_id}")
+async def websocket_endpoint(ws: WebSocket, session_id: str = None):
+
     await ws.accept()
     loop = asyncio.get_event_loop()
 

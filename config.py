@@ -6,12 +6,17 @@ import os
 # ══════════════════════════════════════════════════════════════
 #  LLM  ← change model here (e.g. "llama3.2", "mistral", etc.)
 # ══════════════════════════════════════════════════════════════
-MODEL_NAME = os.getenv("OLLAMA_MODEL", "Qwen3.5-9B.Q4_K_M:latest")
-MODEL_FALLBACKS = [
+PREFERRED_MODEL = "Qwen3.5-9B.Q4_K_M:latest"
+MODEL_NAME = os.getenv("OLLAMA_MODEL", PREFERRED_MODEL)
+_env_fallbacks = [
     model.strip()
     for model in os.getenv("OLLAMA_FALLBACK_MODELS", "").split(",")
     if model.strip()
 ]
+MODEL_FALLBACKS = []
+for _model in [PREFERRED_MODEL, *_env_fallbacks, "phi4-mini:latest"]:
+    if _model and _model != MODEL_NAME and _model not in MODEL_FALLBACKS:
+        MODEL_FALLBACKS.append(_model)
 OLLAMA_BASE_URL    = os.getenv("OLLAMA_BASE_URL",    "http://localhost:11434")
 OLLAMA_NUM_CTX     = int(os.getenv("OLLAMA_NUM_CTX",     "4096"))   # raised from 2048
 OLLAMA_NUM_PREDICT = int(os.getenv("OLLAMA_NUM_PREDICT", "1024"))   # raised from 512
